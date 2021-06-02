@@ -21,31 +21,45 @@ chrome_options.add_argument('--disable-blink-features=AutomationControlled')
 driver = webdriver.Chrome(PATH, chrome_options=chrome_options)
 driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
-driver.get("https://www.dnb.com/business-directory/company-profiles.34bigthings_srl.a0afafb424d5824e9e5fb9722827673e.html")
-driver.close()
-
 Goog = MyGoogleSheet("1CYtmbpPsTMIkgKHp0zGkCxB4chcSNEB-qL2Ifb4d6pw")
 Goog.Init()
 
-driver.get("https://www.ipid.dev/mappa/")
 
-try:
-    IPID_companies = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, "td.sorting_1.wpgmza_table_title"))
-    )
-except:
-    driver.quit()
-
-IPID_companies = driver.find_elements_by_css_selector("td.sorting_1.wpgmza_table_title")
-print(len(IPID_companies))
 companiesName = []
-for s in IPID_companies:
-    companiesName.append([s.text])
-    print(s.text)
+GetFromIPID = False
 
-Goog.WriteData("CompaniesRef!A2", companiesName)
+starting_idx = -1
 
-driver.quit()
+if GetFromIPID:
+    driver.get("https://www.ipid.dev/mappa/")
+
+    try:
+        IPID_companies = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "td.sorting_1.wpgmza_table_title"))
+        )
+    except:
+        driver.quit()
+
+    IPID_companies = driver.find_elements_by_css_selector("td.sorting_1.wpgmza_table_title")
+    print(len(IPID_companies))
+    
+    for s in IPID_companies:
+        companiesName.append([s.text])
+        print(s.text)
+
+    Goog.WriteData("CompaniesRef!A2", companiesName)
+
+    driver.quit()
+else:
+    starting_idx = 92
+    final_idx = starting_idx + 15
+    companiesName = Goog.ReadData("CompaniesRef!A" + str(starting_idx) + ":A" + str(final_idx))
+
+# Getting all links
+
+print(companiesName)
+
+companiesLinks = []
 
 driver.get("https://www.dnb.com")
 
@@ -57,13 +71,34 @@ DnB_search_button.click()
 time.sleep(3)
 
 DnB_search_query_button = driver.find_element_by_id("search_query")
-company_string_name = "34BigThings"
-for char in company_string_name:
-    DnB_search_query_button.send_keys(char)
-    time.sleep(0.2)
+for company_string_name in companiesName:
+    
+    for char in company_string_name[0]:
+        DnB_search_query_button.send_keys(char)
+        time.sleep(0.2)
 
-time.sleep(1)
+    time.sleep(1)
+    try:
+        Company_link = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "a.company_profile_link"))
+        )
+    except:
+        Company_link = None
 
-Company_link = driver.find_element_by_css_selector("a.company_profile_link")
-link = Company_link.get_attribute('href')
-print(link)
+    # Company_link = driver.find_element_by_css_selector("a.company_profile_link")
+    if Company_link is not None:
+        link = Company_link.get_attribute('href')
+        companiesLinks.append([link])
+    else:
+        companiesLinks.append([""])
+
+    for char in company_string_name[0]:
+        DnB_search_query_button.send_keys(Keys.BACKSPACE)
+        time.sleep(0.2)
+
+if starting_idx == -1:
+    Goog.WriteData("CompaniesRef!B2", companiesLinks)
+else:
+    Goog.WriteData("CompaniesRef!B" + str(starting_idx), companiesLinks)
+
+driver.quit()
